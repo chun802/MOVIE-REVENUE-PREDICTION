@@ -1,0 +1,84 @@
+from __future__ import print_function, division
+from bs4 import BeautifulSoup
+from collections import defaultdict
+import pandas as pd
+import csv
+import requests
+import pandas as pd
+
+url = "https://www.imdb.com/title/{}/"
+
+counter = 0
+
+imdb_ids_select = []
+
+with open('181009_movie_id_3.csv','r') as fin:
+    for movie_id in fin:
+        counter += 1
+        print(movie_id.strip())
+        imdb_ids_select.append(movie_id.strip())
+#         if (counter > 10):
+#             break
+
+file_urls =[url.format(movie_id) for movie_id in imdb_ids_select]
+
+with open('movie_file.csv', mode='w') as movie_file:
+    movie_writer = csv.writer(movie_file, delimiter='\t', quoting=csv.QUOTE_MINIMAL)    
+
+fields = ['Country', 'Language','Release Date','Filming Locations',
+          'Budget','Gross USA','Cumulative Worldwide Gross','Runtime',
+          'Opening Weekend USA','Genres']
+
+def get_movie_info(urls):
+    movie_info = str()
+    unknown_field = 'N/A'
+    for url in urls:
+        movie_info = str()
+        movie_info += url.split('/')[-2] + '\t'
+        response = requests.get(url)
+        page = response.text
+        soup = BeautifulSoup(page,"lxml")
+        tags = soup.find(class_='article', id='titleDetails').find_all('div', class_="txt-block")        
+        all_strings = []
+        
+        for tag in tags:
+            strings = list(tag.stripped_strings)
+            all_strings = all_strings + strings
+        
+        for field in fields:
+            field_name = field + ':'
+            if field_name in all_strings:
+                field_index = all_strings.index(field_name)
+                field_content = all_strings[field_index+1] 
+                field_content_clean = field_content.replace('$','') if '$' in list(field_content) else field_content 
+                field_content_clean_2 = field_content_clean.replace(',','') if ',' in list(field_content_clean) else field_content_clean 
+
+                movie_info = movie_info + field_content_clean_2 + '\t'
+            else:
+                movie_info = movie_info + unknown_field + '\t'
+        
+
+        tags_2 = soup.find_all(class_ = 'see-more inline canwrap')
+        for tag_2 in tags_2:
+            if "Genres:" in tag_2.stripped_strings:
+                Genres = list(tag_2.stripped_strings)[1]
+            
+        movie_info+=Genres+'\t'
+        title = soup.find('title').text.split('(')[0].strip()
+        movie_info+= title+ '\t'
+        
+        if soup.find(class_='ratingValue')!= None:
+            
+            rating = soup.find(class_='ratingValue').text.strip().split('/')[0]
+            movie_info+= rating + '\t'
+            Rating_num = soup.find_all(class_='small')[1].text.replace(',','')
+            movie_info+= Rating_num + '\n'
+        
+        else:
+            movie_info += 'N/A\tN/A\n'
+
+        with open('movie_info_181012.csv','a') as fd:
+            fd.write(movie_info)
+
+
+get_movie_info(file_urls)
